@@ -14,7 +14,7 @@ pub struct Bounty {
 }
 
 #[derive(InitSpace)]
-#[account(discriminator = 1)]
+#[account(discriminator = 2)]
 pub struct Submission {
     pub bounty: Pubkey,
     #[max_len(100)]
