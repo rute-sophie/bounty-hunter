@@ -10,7 +10,8 @@ pub struct Bounty {
     pub link: String,
     pub reward: u64,
     pub bump: u8,
-    pub authority: Pubkey,
+    pub maker: Pubkey,
+    pub accepted_submission: Pubkey,
 }
 
 #[derive(InitSpace)]

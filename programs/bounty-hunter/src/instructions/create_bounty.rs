@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::Bounty;
+use crate::state::Bounty;
 
 #[derive(Accounts)]
 #[instruction(seed: u64)]
@@ -33,7 +33,8 @@ pub fn handler(
         link,
         reward,
         bump: ctx.bumps.bounty,
-        authority: *ctx.accounts.maker.key,
+        maker: *ctx.accounts.maker.key,
+        accepted_submission: Pubkey::default(),
     });
     Ok(())
 }

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-use crate::Bounty;
+use crate::state::Bounty;
 
 #[derive(Accounts)]
 pub struct CancelBounty<'info> {

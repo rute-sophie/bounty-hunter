@@ -1,7 +1,9 @@
 use anchor_lang::prelude::*;
 
 #[error_code]
-pub enum ErrorCode {
-    #[msg("Custom error message")]
-    CustomError,
+pub enum BountyHunterErrors {
+    #[msg("Invalid Bounty authority")]
+    InvalidBountyAuthority,
+    #[msg("Invalid Submission")]
+    BountyAndSubmissionMismatch
 }

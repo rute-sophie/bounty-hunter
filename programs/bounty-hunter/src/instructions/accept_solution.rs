@@ -1,9 +1,32 @@
 use anchor_lang::prelude::*;
 
+use crate::{state::{Bounty, Submission}, error::BountyHunterErrors};
+
 #[derive(Accounts)]
-pub struct AcceptSolution {}
+pub struct AcceptSolution<'info> {
+    #[account(mut)]
+    pub maker: Signer<'info>,
+    #[account(
+        mut,
+        has_one = maker @ BountyHunterErrors::InvalidBountyAuthority,
+        //constraint = bounty.maker == maker.key() @ BountyHunterErrors::InvalidBountyAuthority
+    )]
+    pub bounty: Account<'info, Bounty>,
+    #[account(
+        has_one = bounty @ BountyHunterErrors::BountyAndSubmissionMismatch, //only works for pubkeys
+        //constraint = submission.bounty == bounty.key() @ BountyHunterErrors::BountyAndSubmissionMismatch
+    )]
+    pub submission: Account<'info, Submission>,
+}
+
 
 pub fn handler(ctx: Context<AcceptSolution>) -> Result<()> {
-    
+
+    //require!(ctx.accounts.bounty.maker == ctx.accounts.maker.key(), BountyHunterErrors::InvalidBountyAuthority);
+    //require!(ctx.accounts.submission.bounty == ctx.accounts.bounty.key(), BountyHunterErrors::BountyAndSubmissionMismatch);
+
+    if ctx.accounts.bounty.accepted_submission != Pubkey::default() {
+        ctx.accounts.bounty.accepted_submission = ctx.accounts.submission.key()
+    }
     Ok(())
 }

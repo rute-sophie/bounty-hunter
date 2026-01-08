@@ -1,4 +1,4 @@
-use crate::{Bounty, Submission};
+use crate::state::{Bounty, Submission};
 use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
