@@ -21,8 +21,8 @@ pub mod bounty_hunter {
     pub fn cancel_bounty(ctx: Context<CancelBounty>) -> Result<()> {
         cancel_bounty::handler(ctx)
     }
-    pub fn submit_solution(ctx: Context<SubmitSolution>) -> Result<()> {
-        submit_solution::handler(ctx)
+    pub fn submit_solution(ctx: Context<SubmitSolution>, link: String, notes: String) -> Result<()> {
+        submit_solution::handler(ctx, link, notes)
     }
     pub fn accept_solution(ctx: Context<AcceptSolution>) -> Result<()> {
         accept_solution::handler(ctx)

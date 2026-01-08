@@ -19,6 +19,15 @@ pub struct SubmitSolution<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<SubmitSolution>) -> Result<()> {
+pub fn handler(ctx: Context<SubmitSolution>, link: String, notes: String) -> Result<()> {
+    ctx.accounts.submission.set_inner(Submission {
+        bounty: ctx.accounts.bounty.key(),
+        link,
+        hunter: ctx.accounts.hunter.key(),
+        notes,
+    });
     Ok(())
 }
+
+//deser : 0101010 -> {a: 123, b:321}
+//ser : {a: 123, b:321} -> 1010101
