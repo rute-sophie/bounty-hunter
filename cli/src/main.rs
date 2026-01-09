@@ -1,10 +1,9 @@
-use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
-use solana_client::rpc_config::{RpcProgramAccountsConfig, RpcSendTransactionConfig};
+use anchor_lang::{AccountDeserialize, InstructionData, ToAccountMetas};
+use solana_client::rpc_config::{RpcProgramAccountsConfig};
 use solana_client::rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType};
-use solana_sdk::program_pack::Pack;
-use solana_sdk::{instruction::Instruction, program_option::COption};
+use solana_sdk::{instruction::Instruction};
 use {
-    clap::{Arg, ArgGroup, Command, crate_description, crate_name, crate_version},
+    clap::{Arg, Command, crate_description, crate_name, crate_version},
     solana_clap_v3_utils::{
         input_parsers::{
             parse_url_or_moniker,
@@ -54,7 +53,13 @@ async fn process_get_all_bounties(rpc_client: &Arc<RpcClient>) -> Result<(), Box
         .get_program_accounts_with_config(
             &bounty_hunter::ID,
             RpcProgramAccountsConfig {
-                filters: Some([RpcFilterType::Memcmp(Memcmp::new(0, MemcmpEncodedBytes::Bytes([1].to_vec())))].to_vec()),
+                filters: Some(
+                    [RpcFilterType::Memcmp(Memcmp::new(
+                        0,
+                        MemcmpEncodedBytes::Bytes([1].to_vec()),
+                    ))]
+                    .to_vec(),
+                ),
                 //filters: Some([RpcFilterType::Memcmp(Memcmp::new(0, MemcmpEncodedBytes::Base64("AQ==".to_owned())))].to_vec()),
                 //filters: Some([RpcFilterType::DataSize(1214)].to_vec()),
                 account_config: solana_client::rpc_config::RpcAccountInfoConfig {
@@ -149,6 +154,46 @@ async fn process_create_bounty(
     Ok(signature)
 }
 
+async fn process_cancel_bounty(
+    rpc_client: &Arc<RpcClient>,
+    payer: &Arc<dyn Signer>,
+    bounty_address: Pubkey,
+) -> Result<Signature, Box<dyn Error>> {
+    let accounts = bounty_hunter::accounts::CancelBounty {
+        bounty: bounty_address,
+        maker: payer.pubkey(),
+        system_program: solana_system_interface::program::ID,
+    }
+    .to_account_metas(None);
+
+    let data = bounty_hunter::instruction::CancelBounty {}.data();
+
+    let ix = Instruction {
+        accounts,
+        data,
+        program_id: bounty_hunter::ID,
+    };
+
+    let mut transaction =
+        Transaction::new_unsigned(Message::new(&[ix].as_slice(), Some(&payer.pubkey())));
+
+    let blockhash = rpc_client
+        .get_latest_blockhash()
+        .await
+        .map_err(|err| format!("error: unable to get latest blockhash: {}", err))?;
+
+    transaction
+        .try_sign(&[payer], blockhash)
+        .map_err(|err| format!("error: failed to sign transaction: {}", err))?;
+
+    let signature = rpc_client
+        .send_and_confirm_transaction_with_spinner(&transaction)
+        .await
+        .map_err(|err| format!("error: send transaction: {}", err))?;
+
+    Ok(signature)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let app_matches = Command::new(crate_name!())
@@ -224,7 +269,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 ),
         )
         .subcommand(
-            Command::new("get-bounty").about("gets a bounty").arg(
+            Command::new("get-bounty").about("Gets a bounty").arg(
                 Arg::new("bounty_address")
                     .value_name("bounty_address")
                     .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
@@ -235,7 +280,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .help("Specify the bounty address"),
             ),
         )
-        .subcommand(Command::new("get-all-bounties").about("gets all bounties"))
+        .subcommand(
+            Command::new("cancel-bounty").about("Cancels a bounty").arg(
+                Arg::new("bounty_address")
+                    .value_name("bounty_address")
+                    .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
+                    .takes_value(true)
+                    .required(true)
+                    .index(1)
+                    .display_order(1)
+                    .help("Specify the bounty address"),
+            ),
+        )
+        .subcommand(Command::new("get-all-bounties").about("Gets all bounties"))
         /*.subcommand(
             Command::new("delete-config")
                 .about("Deletes a list")
@@ -561,6 +618,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     eprintln!("error: get-bounty: {}", err);
                     exit(1);
                 });
+        }
+        ("cancel-bounty", arg_matches) => {
+            let bounty_address =
+                SignerSource::try_get_pubkey(arg_matches, "bounty_address", &mut wallet_manager)
+                    .unwrap()
+                    .unwrap();
+            let response = process_cancel_bounty(&rpc_client, &config.payer, bounty_address)
+                .await
+                .unwrap_or_else(|err| {
+                    eprintln!("error: cancel-bounty: {}", err);
+                    exit(1);
+                });
+            println!("{}", response);
         }
         ("get-all-bounties", _arg_matches) => {
             process_get_all_bounties(&rpc_client)
