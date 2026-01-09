@@ -7,6 +7,8 @@ use anchor_client::{
     Client, Cluster,
 };
 
+use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
+
 #[test]
 fn test_initialize() {
     let program_id = "ELt3SqpiHUsHJ5fxZpH1ksug6nWjAvYBxxKqK5PHfkBa";
