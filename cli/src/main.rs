@@ -1,7 +1,7 @@
 use anchor_lang::{AccountDeserialize, InstructionData, ToAccountMetas};
-use solana_client::rpc_config::{RpcProgramAccountsConfig};
+use solana_client::rpc_config::RpcProgramAccountsConfig;
 use solana_client::rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType};
-use solana_sdk::{instruction::Instruction};
+use solana_sdk::instruction::Instruction;
 use {
     clap::{Arg, Command, crate_description, crate_name, crate_version},
     solana_clap_v3_utils::{
@@ -94,6 +94,76 @@ async fn process_get_all_bounties(rpc_client: &Arc<RpcClient>) -> Result<(), Box
     Ok(())
 }
 
+async fn process_get_submission(
+    rpc_client: &Arc<RpcClient>,
+    submission_address: Pubkey,
+) -> Result<(), Box<dyn Error>> {
+    let data = rpc_client
+        .get_account_data(&submission_address)
+        .await
+        .unwrap();
+
+    let submission = bounty_hunter::state::Submission::try_deserialize(&mut data.as_ref())
+        .expect("bounty does not exist");
+
+    println!(
+        "SUBMISSION: \n\t hunter: {} \n\t notes: {} \n\t link: {} \n\t bounty: {}",
+        submission.hunter, submission.notes, submission.link, submission.bounty
+    );
+
+    Ok(())
+}
+
+async fn process_get_all_submissions(
+    rpc_client: &Arc<RpcClient>,
+    bounty_address: Option<Pubkey>,
+) -> Result<(), Box<dyn Error>> {
+    let mut filter_bytes = vec![2];
+
+    if let Some(ba) = bounty_address {
+        filter_bytes.extend_from_slice(ba.as_ref());
+    }
+    let data = rpc_client
+        .get_program_accounts_with_config(
+            &bounty_hunter::ID,
+            RpcProgramAccountsConfig {
+                filters: Some(
+                    [RpcFilterType::Memcmp(Memcmp::new(
+                        0,
+                        MemcmpEncodedBytes::Bytes(filter_bytes),
+                    ))]
+                    .to_vec(),
+                ),
+                //filters: Some([RpcFilterType::Memcmp(Memcmp::new(0, MemcmpEncodedBytes::Base64("AQ==".to_owned())))].to_vec()),
+                //filters: Some([RpcFilterType::DataSize(1214)].to_vec()),
+                account_config: solana_client::rpc_config::RpcAccountInfoConfig {
+                    encoding: Some(
+                        anchor_client::solana_account_decoder::UiAccountEncoding::Base64,
+                    ),
+                    commitment: None,
+                    data_slice: None,
+                    min_context_slot: None,
+                },
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("something went wrong");
+
+    for (pk, account) in data {
+        let submission =
+            bounty_hunter::state::Submission::try_deserialize(&mut account.data.as_ref())
+                .expect("submission does not exist");
+
+        println!(
+            "SUBMISSION {}: \n\t hunter: {} \n\t notes: {} \n\t link: {} \n\t bounty: {}",
+            pk, submission.hunter, submission.notes, submission.link, submission.bounty
+        );
+    }
+
+    Ok(())
+}
+
 async fn process_create_bounty(
     rpc_client: &Arc<RpcClient>,
     payer: &Arc<dyn Signer>,
@@ -150,6 +220,61 @@ async fn process_create_bounty(
         .map_err(|err| format!("error: send transaction: {}", err))?;
 
     println!("bounty : {:?}", bounty.0);
+
+    Ok(signature)
+}
+
+async fn process_submit_solution(
+    rpc_client: &Arc<RpcClient>,
+    payer: &Arc<dyn Signer>,
+    bounty_address: Pubkey,
+    notes: String,
+    link: String,
+) -> Result<Signature, Box<dyn Error>> {
+    let submission = Pubkey::find_program_address(
+        &[
+            b"submission",
+            payer.pubkey().as_ref(),
+            bounty_address.as_ref(),
+        ],
+        &bounty_hunter::ID,
+    )
+    .0;
+
+    let accounts = bounty_hunter::accounts::SubmitSolution {
+        bounty: bounty_address,
+        hunter: payer.pubkey(),
+        submission,
+        system_program: solana_system_interface::program::ID,
+    }
+    .to_account_metas(None);
+
+    let data = bounty_hunter::instruction::SubmitSolution { notes, link }.data();
+
+    let ix = Instruction {
+        accounts,
+        data,
+        program_id: bounty_hunter::ID,
+    };
+
+    let mut transaction =
+        Transaction::new_unsigned(Message::new(&[ix].as_slice(), Some(&payer.pubkey())));
+
+    let blockhash = rpc_client
+        .get_latest_blockhash()
+        .await
+        .map_err(|err| format!("error: unable to get latest blockhash: {}", err))?;
+
+    transaction
+        .try_sign(&[payer], blockhash)
+        .map_err(|err| format!("error: failed to sign transaction: {}", err))?;
+
+    let signature = rpc_client
+        .send_and_confirm_transaction_with_spinner(&transaction)
+        .await
+        .map_err(|err| format!("error: send transaction: {}", err))?;
+
+    println!("submission : {:?}", submission);
 
     Ok(signature)
 }
@@ -269,6 +394,32 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 ),
         )
         .subcommand(
+            Command::new("submit-solution")
+                .about("Submits a solution to a bounty")
+                .arg(
+                    Arg::new("bounty_address")
+                        .value_name("bounty_address")
+                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
+                        .takes_value(true)
+                        .required(true)
+                        .help("Specify the bounty address"),
+                )
+                .arg(
+                    Arg::new("notes")
+                        .value_name("notes")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Submission notes"),
+                )
+                .arg(
+                    Arg::new("link")
+                        .value_name("link")
+                        .takes_value(true)
+                        .required(true)
+                        .help("Submission link"),
+                ),
+        )
+        .subcommand(
             Command::new("get-bounty").about("Gets a bounty").arg(
                 Arg::new("bounty_address")
                     .value_name("bounty_address")
@@ -279,6 +430,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     .display_order(1)
                     .help("Specify the bounty address"),
             ),
+        )
+        .subcommand(
+            Command::new("get-submission")
+                .about("Gets a submission")
+                .arg(
+                    Arg::new("submission_address")
+                        .value_name("submission_address")
+                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
+                        .takes_value(true)
+                        .required(true)
+                        .index(1)
+                        .display_order(1)
+                        .help("Specify the submission address"),
+                ),
         )
         .subcommand(
             Command::new("cancel-bounty").about("Cancels a bounty").arg(
@@ -293,6 +458,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
             ),
         )
         .subcommand(Command::new("get-all-bounties").about("Gets all bounties"))
+        .subcommand(
+            Command::new("get-all-submissions")
+                .about("Gets all submission")
+                .arg(
+                    Arg::new("bounty_address")
+                        .value_name("bounty_address")
+                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
+                        .takes_value(true)
+                        .long("bounty-address")
+                        .short('b')
+                        .required(false)
+                        .help("Filters submissions by bounty"),
+                ),
+        )
         /*.subcommand(
             Command::new("delete-config")
                 .about("Deletes a list")
@@ -607,6 +786,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
             });
             println!("{}", response);
         }
+        ("submit-solution", arg_matches) => {
+            let notes: &String = arg_matches.get_one("notes").expect("notes is missing");
+            let link: &String = arg_matches.get_one("link").expect("link is missing");
+            let bounty_address =
+                SignerSource::try_get_pubkey(arg_matches, "bounty_address", &mut wallet_manager)
+                    .unwrap()
+                    .unwrap();
+            let response = process_submit_solution(
+                &rpc_client,
+                &config.payer,
+                bounty_address,
+                notes.clone(),
+                link.clone(),
+            )
+            .await
+            .unwrap_or_else(|err| {
+                eprintln!("error: submit-solution: {}", err);
+                exit(1);
+            });
+            println!("{}", response);
+        }
         ("get-bounty", arg_matches) => {
             let bounty_address =
                 SignerSource::try_get_pubkey(arg_matches, "bounty_address", &mut wallet_manager)
@@ -616,6 +816,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .await
                 .unwrap_or_else(|err| {
                     eprintln!("error: get-bounty: {}", err);
+                    exit(1);
+                });
+        }
+        ("get-submission", arg_matches) => {
+            let submission_address = SignerSource::try_get_pubkey(
+                arg_matches,
+                "submission_address",
+                &mut wallet_manager,
+            )
+            .unwrap()
+            .unwrap();
+            process_get_submission(&rpc_client, submission_address)
+                .await
+                .unwrap_or_else(|err| {
+                    eprintln!("error: get-submission: {}", err);
                     exit(1);
                 });
         }
@@ -637,6 +852,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .await
                 .unwrap_or_else(|err| {
                     eprintln!("error: get-bounty: {}", err);
+                    exit(1);
+                });
+        }
+        ("get-all-submissions", arg_matches) => {
+            let bounty_address = if let Ok(Some(pk)) =
+                SignerSource::try_get_pubkey(arg_matches, "bounty_address", &mut wallet_manager)
+            {
+                Some(pk)
+            } else {
+                None
+            };
+            process_get_all_submissions(&rpc_client, bounty_address)
+                .await
+                .unwrap_or_else(|err| {
+                    eprintln!("error: get-all-submission: {}", err);
                     exit(1);
                 });
         }
