@@ -1,6 +1,9 @@
 use anchor_lang::prelude::*;
 
-use crate::{state::{Bounty, Submission}, error::BountyHunterErrors};
+use crate::{
+    error::BountyHunterErrors,
+    state::{Bounty, Submission},
+};
 
 #[derive(Accounts)]
 pub struct AcceptSolution<'info> {
@@ -19,14 +22,14 @@ pub struct AcceptSolution<'info> {
     pub submission: Account<'info, Submission>,
 }
 
+impl AcceptSolution<'_> {
+    pub fn handler(ctx: Context<AcceptSolution>) -> Result<()> {
+        //require!(ctx.accounts.bounty.maker == ctx.accounts.maker.key(), BountyHunterErrors::InvalidBountyAuthority);
+        //require!(ctx.accounts.submission.bounty == ctx.accounts.bounty.key(), BountyHunterErrors::BountyAndSubmissionMismatch);
 
-pub fn handler(ctx: Context<AcceptSolution>) -> Result<()> {
-
-    //require!(ctx.accounts.bounty.maker == ctx.accounts.maker.key(), BountyHunterErrors::InvalidBountyAuthority);
-    //require!(ctx.accounts.submission.bounty == ctx.accounts.bounty.key(), BountyHunterErrors::BountyAndSubmissionMismatch);
-
-    if ctx.accounts.bounty.accepted_submission != Pubkey::default() {
-        ctx.accounts.bounty.accepted_submission = ctx.accounts.submission.key()
+        if ctx.accounts.bounty.accepted_submission != Pubkey::default() {
+            ctx.accounts.bounty.accepted_submission = ctx.accounts.submission.key()
+        }
+        Ok(())
     }
-    Ok(())
 }

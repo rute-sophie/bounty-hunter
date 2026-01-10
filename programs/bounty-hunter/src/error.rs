@@ -5,5 +5,5 @@ pub enum BountyHunterErrors {
     #[msg("Invalid Bounty authority")]
     InvalidBountyAuthority,
     #[msg("Invalid Submission")]
-    BountyAndSubmissionMismatch
+    BountyAndSubmissionMismatch,
 }

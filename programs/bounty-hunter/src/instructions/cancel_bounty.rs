@@ -17,7 +17,8 @@ pub struct CancelBounty<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(_ctx: Context<CancelBounty>) -> Result<()> {
-    
-    Ok(())
+impl CancelBounty<'_> {
+    pub fn handler(_ctx: Context<CancelBounty>) -> Result<()> {
+        Ok(())
+    }
 }

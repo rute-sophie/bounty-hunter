@@ -20,21 +20,23 @@ pub struct CreateBounty<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(
-    ctx: Context<CreateBounty>,
-    seed: u64,
-    description: String,
-    link: String,
-    reward: u64,
-) -> Result<()> {
-    ctx.accounts.bounty.set_inner(Bounty {
-        seed,
-        description,
-        link,
-        reward,
-        bump: ctx.bumps.bounty,
-        maker: *ctx.accounts.maker.key,
-        accepted_submission: Pubkey::default(),
-    });
-    Ok(())
+impl CreateBounty<'_> {
+    pub fn handler(
+        ctx: Context<CreateBounty>,
+        seed: u64,
+        description: String,
+        link: String,
+        reward: u64,
+    ) -> Result<()> {
+        ctx.accounts.bounty.set_inner(Bounty {
+            seed,
+            description,
+            link,
+            reward,
+            bump: ctx.bumps.bounty,
+            maker: *ctx.accounts.maker.key,
+            accepted_submission: Pubkey::default(),
+        });
+        Ok(())
+    }
 }
