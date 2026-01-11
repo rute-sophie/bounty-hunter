@@ -114,6 +114,54 @@ async fn process_get_submission(
     Ok(())
 }
 
+async fn process_accept_submission(
+    rpc_client: &Arc<RpcClient>,
+    payer: &Arc<dyn Signer>,
+    submission_address: Pubkey,
+) -> Result<Signature, Box<dyn Error>> {
+    let data = rpc_client
+        .get_account_data(&submission_address)
+        .await
+        .unwrap();
+
+    let submission = bounty_hunter::state::Submission::try_deserialize(&mut data.as_ref())
+        .expect("bounty does not exist");
+
+    let accounts = bounty_hunter::accounts::AcceptSolution {
+        maker: payer.pubkey(),
+        bounty: submission.bounty,
+        submission: submission_address,
+    }
+    .to_account_metas(None);
+
+    let data = bounty_hunter::instruction::AcceptSolution {}.data();
+
+    let ix = Instruction {
+        accounts,
+        data,
+        program_id: bounty_hunter::ID,
+    };
+
+    let mut transaction =
+        Transaction::new_unsigned(Message::new(&[ix].as_slice(), Some(&payer.pubkey())));
+
+    let blockhash = rpc_client
+        .get_latest_blockhash()
+        .await
+        .map_err(|err| format!("error: unable to get latest blockhash: {}", err))?;
+
+    transaction
+        .try_sign(&[payer], blockhash)
+        .map_err(|err| format!("error: failed to sign transaction: {}", err))?;
+
+    let signature = rpc_client
+        .send_and_confirm_transaction_with_spinner(&transaction)
+        .await
+        .map_err(|err| format!("error: send transaction: {}", err))?;
+
+    Ok(signature)
+}
+
 async fn process_get_all_submissions(
     rpc_client: &Arc<RpcClient>,
     bounty_address: Option<Pubkey>,
@@ -446,6 +494,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 ),
         )
         .subcommand(
+            Command::new("accept-submission")
+                .about("Accepts a submission")
+                .arg(
+                    Arg::new("submission_address")
+                        .value_name("submission_address")
+                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
+                        .takes_value(true)
+                        .required(true)
+                        .index(1)
+                        .display_order(1)
+                        .help("Specify the submission address"),
+                ),
+        )
+        .subcommand(
             Command::new("cancel-bounty").about("Cancels a bounty").arg(
                 Arg::new("bounty_address")
                     .value_name("bounty_address")
@@ -472,247 +534,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .help("Filters submissions by bounty"),
                 ),
         )
-        /*.subcommand(
-            Command::new("delete-config")
-                .about("Deletes a list")
-                .arg(
-                    Arg::new("mint_address")
-                        .value_name("MINT_ADDRESS")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .required(true)
-                        .index(1)
-                        .display_order(1)
-                        .help("Specify the mint address"),
-                )
-                .arg(
-                    Arg::new("receiver_address")
-                        .short('r')
-                        .long("receiver")
-                        .value_name("RECEIVER_ADDRESS")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .required(false)
-                        .help("Specify the receiver address"),
-        ))
-        .subcommand(
-            Command::new("set-authority")
-                .about("Sets the authority of a mint config")
-                .arg(
-                    Arg::new("mint_address")
-                        .value_name("MINT_ADDRESS")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .required(true)
-                        .index(1)
-                        .display_order(1)
-                        .help("Specify the mint address"),
-                )
-                .arg(
-                    Arg::new("new_authority")
-                        .value_name("NEW_AUTHORITY")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .required(true)
-                        .short('a')
-                        .long("new-authority")
-                        .help("Specify the new authority address"),
-        ))
-        .subcommand(
-            Command::new("set-gating-program")
-                .about("Sets the gating program of a mint config")
-                .arg(
-                    Arg::new("mint_address")
-                        .value_name("MINT_ADDRESS")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .required(true)
-                        .index(1)
-                        .display_order(1)
-                        .help("Specify the mint address"),
-                )
-                .arg(
-                    Arg::new("new_gating_program")
-                        .value_name("NEW_GATING_PROGRAM")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .required(true)
-                        .display_order(2)
-                        .short('g')
-                        .long("new-gating-program")
-                        .help("Specify the new gating program address"),
-        ))
-        .subcommand(
-            Command::new("set-instructions")
-                .about("Sets the gating program of a mint config")
-                .arg(
-                    Arg::new("mint_address")
-                        .value_name("MINT_ADDRESS")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .required(true)
-                        .index(1)
-                        .display_order(1)
-                        .help("Specify the mint address"),
-                )
-                .arg(
-                    Arg::new("enable_thaw")
-                        .value_name("ENABLE_THAW")
-                        .takes_value(false)
-                        .long("enable-thaw")
-                        .required(false)
-                        .help("Enable thaw instructions"),
-                )
-                .arg(
-                    Arg::new("disable_thaw")
-                        .value_name("DISABLE_THAW")
-                        .takes_value(false)
-                        .long("disable-thaw")
-                        .required(false)
-                        .help("Disable thaw instructions"),
-                )
-                .arg(
-                    Arg::new("enable_freeze")
-                        .value_name("ENABLE_FREEZE")
-                        .takes_value(false)
-                        .long("enable-freeze")
-                        .required(false)
-                        .help("Enable freeze instructions"),
-                )
-                .arg(
-                    Arg::new("disable_freeze")
-                        .value_name("DISABLE_FREEZE")
-                        .takes_value(false)
-                        .long("disable-freeze")
-                        .required(false)
-                        .help("Disable freeze instructions"),
-                )
-                .group(ArgGroup::new("thaw")
-                    .required(true)
-                    .args(&["enable_thaw", "disable_thaw"])
-                )
-                .group(ArgGroup::new("freeze")
-                    .required(true)
-                    .args(&["enable_freeze", "disable_freeze"])
-                )
-        )
-        .subcommand(
-            Command::new("thaw-permissionless")
-                .about("Thaws a token account")
-                .arg(
-                    Arg::new("mint_address")
-                        .value_name("MINT_ADDRESS")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .long("mint")
-                        .required_unless_present("token_account")
-                        .display_order(1)
-                        .help("Specify the mint address"),
-                )
-                .arg(
-                    Arg::new("token_account")
-                        .value_name("TOKEN_ACCOUNT")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .long("token-account")
-                        .required_unless_present("mint_address")
-                        .required_unless_present("token_account_owner")
-                        .conflicts_with("mint_address")
-                        .conflicts_with("token_account_owner")
-                        .help("Specify the token account address"),
-                )
-                .arg(
-                    Arg::new("token_account_owner")
-                        .value_name("TOKEN_ACCOUNT_OWNER")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .long("owner")
-                        .required_unless_present("token_account")
-                        .conflicts_with("token_account")
-                        .help("Specify the token account owner address"),
-                )
-        )
-        .subcommand(
-            Command::new("create-ata-and-thaw-permissionless")
-                .about("Creates an associated token account and thaws it")
-                .arg(
-                    Arg::new("mint_address")
-                        .value_name("MINT_ADDRESS")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .long("mint")
-                        .required(true)
-                        .display_order(1)
-                        .help("Specify the mint address"),
-                )
-                .arg(
-                    Arg::new("token_account_owner")
-                        .value_name("TOKEN_ACCOUNT_OWNER")
-                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                        .takes_value(true)
-                        .long("owner")
-                        .required(true)
-                        .help("Specify the token account owner address"),
-                )
-        )
-        .subcommand(
-            Command::new("freeze-permissionless")
-            .about("Freezes a token account")
-            .arg(
-                Arg::new("mint_address")
-                    .value_name("MINT_ADDRESS")
-                    .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                    .takes_value(true)
-                    .long("mint")
-                    .required_unless_present("token_account")
-                    .display_order(1)
-                    .help("Specify the mint address. Requires the owner to be specified."),
-            )
-            .arg(
-                Arg::new("token_account")
-                    .value_name("TOKEN_ACCOUNT")
-                    .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                    .takes_value(true)
-                    .long("token-account")
-                    .required_unless_present("mint_address")
-                    .required_unless_present("token_account_owner")
-                    .conflicts_with("mint_address")
-                    .conflicts_with("token_account_owner")
-                    .help("Specify the token account address"),
-            )
-            .arg(
-                Arg::new("token_account_owner")
-                    .value_name("TOKEN_ACCOUNT_OWNER")
-                    .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                    .takes_value(true)
-                    .long("owner")
-                    .required_unless_present("token_account")
-                    .conflicts_with("token_account")
-                    .help("Specify the token account owner address. Requires the mint address to be specified."),
-            )
-        )
-        .subcommand(
-            Command::new("freeze")
-            .about("Freezes a token account using the defined freeze authority.")
-            .arg(
-                Arg::new("token_account")
-                    .value_name("TOKEN_ACCOUNT")
-                    .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                    .takes_value(true)
-                    .help("Specify the token account address"),
-            )
-        )
-        .subcommand(
-            Command::new("thaw")
-            .about("Thaws a token account using the defined freeze authority.")
-            .arg(
-                Arg::new("token_account")
-                    .value_name("TOKEN_ACCOUNT")
-                    .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
-                    .takes_value(true)
-                    .help("Specify the token account address"),
-            )
-        )*/
         .get_matches();
 
     let (command, matches) = app_matches.subcommand().unwrap();
@@ -834,6 +655,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     exit(1);
                 });
         }
+        ("accept-submission", arg_matches) => {
+            let submission_address = SignerSource::try_get_pubkey(
+                arg_matches,
+                "submission_address",
+                &mut wallet_manager,
+            )
+            .unwrap()
+            .unwrap();
+            let response = process_accept_submission(&rpc_client, &config.payer, submission_address)
+                .await
+                .unwrap_or_else(|err| {
+                    eprintln!("error: accept-submission: {}", err);
+                    exit(1);
+                });
+            println!("{}", response);
+        }
         ("cancel-bounty", arg_matches) => {
             let bounty_address =
                 SignerSource::try_get_pubkey(arg_matches, "bounty_address", &mut wallet_manager)
@@ -870,201 +707,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     exit(1);
                 });
         }
-
-        /*("delete-list", arg_matches) => {
-            let mint_address =
-                SignerSource::try_get_pubkey(arg_matches, "mint_address", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
-            let receiver_address =
-                SignerSource::try_get_pubkey(arg_matches, "receiver_address", &mut wallet_manager)
-                    .unwrap();
-            let response = process_delete_config(
-                &rpc_client,
-                &config.payer,
-                &mint_address,
-                receiver_address.as_ref(),
-            )
-            .await
-            .unwrap_or_else(|err| {
-                eprintln!("error: delete-list: {}", err);
-                exit(1);
-            });
-            println!("{}", response);
-        }
-        ("set-authority", arg_matches) => {
-            let mint_address =
-                SignerSource::try_get_pubkey(arg_matches, "mint_address", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
-            let new_authority =
-                SignerSource::try_get_pubkey(arg_matches, "new_authority", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
-            let response =
-                process_set_authority(&rpc_client, &config.payer, &mint_address, &new_authority)
-                    .await
-                    .unwrap_or_else(|err| {
-                        eprintln!("error: set-authority: {}", err);
-                        exit(1);
-                    });
-            println!("{}", response);
-        }
-        ("set-gating-program", arg_matches) => {
-            let mint_address =
-                SignerSource::try_get_pubkey(arg_matches, "mint_address", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
-            let new_gating_program = SignerSource::try_get_pubkey(
-                arg_matches,
-                "new_gating_program",
-                &mut wallet_manager,
-            )
-            .unwrap()
-            .unwrap();
-            let response = process_set_gating_program(
-                &rpc_client,
-                &config.payer,
-                &mint_address,
-                &new_gating_program,
-            )
-            .await
-            .unwrap_or_else(|err| {
-                eprintln!("error: set-gating-program: {}", err);
-                exit(1);
-            });
-            println!("{}", response);
-        }
-        ("set-instructions", arg_matches) => {
-            let mint_address =
-                SignerSource::try_get_pubkey(arg_matches, "mint_address", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
-
-            // clap enforces either enable or disable flags are present
-            // just need to get the enable to know what to do
-            let enable_thaw = arg_matches.contains_id("enable_thaw");
-            let enable_freeze = arg_matches.contains_id("enable_freeze");
-
-            let response = process_set_instructions(
-                &rpc_client,
-                &config.payer,
-                &mint_address,
-                enable_thaw,
-                enable_freeze,
-            )
-            .await
-            .unwrap_or_else(|err| {
-                eprintln!("error: set-instructions: {}", err);
-                exit(1);
-            });
-            println!("{}", response);
-        }
-        ("thaw-permissionless", arg_matches) => {
-            let mint_address =
-                SignerSource::try_get_pubkey(arg_matches, "mint_address", &mut wallet_manager)
-                    .unwrap();
-            let token_account =
-                SignerSource::try_get_pubkey(arg_matches, "token_account", &mut wallet_manager)
-                    .unwrap();
-            let token_account_owner = SignerSource::try_get_pubkey(
-                arg_matches,
-                "token_account_owner",
-                &mut wallet_manager,
-            )
-            .unwrap();
-            let response = process_thaw_permissionless(
-                &rpc_client,
-                &config.payer,
-                mint_address,
-                token_account,
-                token_account_owner,
-            )
-            .await
-            .unwrap_or_else(|err| {
-                eprintln!("error: thaw-permissionless: {}", err);
-                exit(1);
-            });
-            println!("{}", response);
-        }
-        ("create-ata-and-thaw-permissionless", arg_matches) => {
-            let mint_address =
-                SignerSource::try_get_pubkey(arg_matches, "mint_address", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
-            let token_account_owner = SignerSource::try_get_pubkey(
-                arg_matches,
-                "token_account_owner",
-                &mut wallet_manager,
-            )
-            .unwrap()
-            .unwrap();
-            let response = process_create_ata_and_thaw_permissionless(
-                &rpc_client,
-                &config.payer,
-                mint_address,
-                token_account_owner,
-            )
-            .await
-            .unwrap_or_else(|err| {
-                eprintln!("error: thaw-permissionless: {}", err);
-                exit(1);
-            });
-            println!("{}", response);
-        }
-        ("freeze-permissionless", arg_matches) => {
-            let mint_address =
-                SignerSource::try_get_pubkey(arg_matches, "mint_address", &mut wallet_manager)
-                    .unwrap();
-            let token_account =
-                SignerSource::try_get_pubkey(arg_matches, "token_account", &mut wallet_manager)
-                    .unwrap();
-            let token_account_owner = SignerSource::try_get_pubkey(
-                arg_matches,
-                "token_account_owner",
-                &mut wallet_manager,
-            )
-            .unwrap();
-            let response = process_freeze_permissionless(
-                &rpc_client,
-                &config.payer,
-                mint_address,
-                token_account,
-                token_account_owner,
-            )
-            .await
-            .unwrap_or_else(|err| {
-                eprintln!("error: freeze-permissionless: {}", err);
-                exit(1);
-            });
-            println!("{}", response);
-        }
-        ("freeze", arg_matches) => {
-            let token_account =
-                SignerSource::try_get_pubkey(arg_matches, "token_account", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
-            let response = process_freeze(&rpc_client, &config.payer, token_account)
-                .await
-                .unwrap_or_else(|err| {
-                    eprintln!("error: freeze: {}", err);
-                    exit(1);
-                });
-            println!("{}", response);
-        }
-        ("thaw", arg_matches) => {
-            let token_account =
-                SignerSource::try_get_pubkey(arg_matches, "token_account", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
-            let response = process_thaw(&rpc_client, &config.payer, token_account)
-                .await
-                .unwrap_or_else(|err| {
-                    eprintln!("error: thaw: {}", err);
-                    exit(1);
-                });
-            println!("{}", response);
-        }*/
         _ => unreachable!(),
     };
 

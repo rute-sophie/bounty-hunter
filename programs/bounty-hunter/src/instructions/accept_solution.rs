@@ -12,6 +12,7 @@ pub struct AcceptSolution<'info> {
     #[account(
         mut,
         has_one = maker @ BountyHunterErrors::InvalidBountyAuthority,
+        constraint = bounty.accepted_submission == Pubkey::default() @ BountyHunterErrors::BountyClosed
         //constraint = bounty.maker == maker.key() @ BountyHunterErrors::InvalidBountyAuthority
     )]
     pub bounty: Account<'info, Bounty>,
@@ -27,9 +28,8 @@ impl AcceptSolution<'_> {
         //require!(ctx.accounts.bounty.maker == ctx.accounts.maker.key(), BountyHunterErrors::InvalidBountyAuthority);
         //require!(ctx.accounts.submission.bounty == ctx.accounts.bounty.key(), BountyHunterErrors::BountyAndSubmissionMismatch);
 
-        if ctx.accounts.bounty.accepted_submission != Pubkey::default() {
-            ctx.accounts.bounty.accepted_submission = ctx.accounts.submission.key()
-        }
+        
+        ctx.accounts.bounty.accepted_submission = ctx.accounts.submission.key();
         Ok(())
     }
 }

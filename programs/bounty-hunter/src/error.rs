@@ -6,4 +6,6 @@ pub enum BountyHunterErrors {
     InvalidBountyAuthority,
     #[msg("Invalid Submission")]
     BountyAndSubmissionMismatch,
+    #[msg("Bounty Already Closed")]
+    BountyClosed,
 }
