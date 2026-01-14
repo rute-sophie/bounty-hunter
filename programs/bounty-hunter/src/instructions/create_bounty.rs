@@ -1,8 +1,8 @@
 use anchor_lang::prelude::*;
-
 use crate::state::Bounty;
 
 //use anchor_spl::token::{Token};
+use anchor_spl::token::{transfer_checked, TransferChecked};
 use anchor_spl::{associated_token::AssociatedToken, token_interface::TokenInterface};
 use anchor_spl::token_interface::Mint;
 use anchor_spl::token_interface::TokenAccount;
@@ -31,7 +31,7 @@ pub struct CreateBounty<'info> {
             associated_token::authority = bounty,
             associated_token::token_program = token_program,
         )]
-    pub maker_ata_a: InterfaceAccount<'info, TokenAccount>,
+    pub maker_ata: InterfaceAccount<'info, TokenAccount>,
 
     // the token account associated with the escrow and mint where deposit tokens are parked
     #[account(
@@ -67,6 +67,28 @@ impl CreateBounty<'_> {
             maker: *ctx.accounts.maker.key,
             accepted_submission: Pubkey::default(),
         });
+        ctx.accounts.deposit_tokens(reward)?;/* the ? is equivalent to
+        if let Err(e) = ctx.accounts.deposit_tokens(reward) {
+            return Err(e)
+        } */
+        Ok(())
+    }
+
+    ///deposit the tokens
+    fn deposit_tokens(&self, amount: u64) -> Result<()> {
+        transfer_checked(
+            CpiContext::new(
+                self.token_program.to_account_info(),
+                TransferChecked {
+                    from: self.maker_ata.to_account_info(),
+                    mint: self.mint.to_account_info(),
+                    to: self.vault.to_account_info(),
+                    authority: self.maker.to_account_info(),
+                },
+            ),
+            amount,
+            self.mint.decimals,
+        )?;
         Ok(())
     }
 }
