@@ -1,11 +1,11 @@
-use anchor_lang::prelude::*;
 use crate::state::Bounty;
+use anchor_lang::prelude::*;
 
 //use anchor_spl::token::{Token};
 use anchor_spl::token::{transfer_checked, TransferChecked};
-use anchor_spl::{associated_token::AssociatedToken, token_interface::TokenInterface};
 use anchor_spl::token_interface::Mint;
 use anchor_spl::token_interface::TokenAccount;
+use anchor_spl::{associated_token::AssociatedToken, token_interface::TokenInterface};
 
 #[derive(Accounts)]
 #[instruction(seed: u64)]
@@ -47,7 +47,7 @@ pub struct CreateBounty<'info> {
 
     pub token_program: Interface<'info, TokenInterface>,
 
-    pub associated_token_program: Program<'info, AssociatedToken>
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 impl CreateBounty<'_> {
@@ -67,10 +67,10 @@ impl CreateBounty<'_> {
             maker: *ctx.accounts.maker.key,
             accepted_submission: Pubkey::default(),
         });
-        ctx.accounts.deposit_tokens(reward)?;/* the ? is equivalent to
-        if let Err(e) = ctx.accounts.deposit_tokens(reward) {
-            return Err(e)
-        } */
+        ctx.accounts.deposit_tokens(reward)?; /* the ? is equivalent to
+                                              if let Err(e) = ctx.accounts.deposit_tokens(reward) {
+                                                  return Err(e)
+                                              } */
         Ok(())
     }
 

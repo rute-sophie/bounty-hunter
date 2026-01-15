@@ -28,7 +28,6 @@ impl AcceptSolution<'_> {
         //require!(ctx.accounts.bounty.maker == ctx.accounts.maker.key(), BountyHunterErrors::InvalidBountyAuthority);
         //require!(ctx.accounts.submission.bounty == ctx.accounts.bounty.key(), BountyHunterErrors::BountyAndSubmissionMismatch);
 
-        
         ctx.accounts.bounty.accepted_submission = ctx.accounts.submission.key();
         Ok(())
     }
