@@ -26,21 +26,21 @@ pub struct CreateBounty<'info> {
 
     // the token account associated with the maker and mint used to deposit tokens in the vault
     #[account(
-            mut,
-            associated_token::mint = mint,
-            associated_token::authority = bounty,
-            associated_token::token_program = token_program,
-        )]
-    pub maker_ata: InterfaceAccount<'info, TokenAccount>,
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = bounty,
+        associated_token::token_program = token_program,
+    )]
+    pub maker_token_account: InterfaceAccount<'info, TokenAccount>,
 
     // the token account associated with the escrow and mint where deposit tokens are parked
     #[account(
-            init,
-            payer = maker,
-            associated_token::mint = mint,
-            associated_token::authority = bounty,
-            associated_token::token_program = token_program
-        )]
+        init,
+        payer = maker,
+        associated_token::mint = mint,
+        associated_token::authority = bounty,
+        associated_token::token_program = token_program,
+    )]
     pub vault: InterfaceAccount<'info, TokenAccount>,
 
     pub system_program: Program<'info, System>,
@@ -80,7 +80,7 @@ impl CreateBounty<'_> {
             CpiContext::new(
                 self.token_program.to_account_info(),
                 TransferChecked {
-                    from: self.maker_ata.to_account_info(),
+                    from: self.maker_token_account.to_account_info(),
                     mint: self.mint.to_account_info(),
                     to: self.vault.to_account_info(),
                     authority: self.maker.to_account_info(),
