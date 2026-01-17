@@ -28,7 +28,7 @@ pub struct CreateBounty<'info> {
     #[account(
         mut,
         associated_token::mint = mint,
-        associated_token::authority = bounty,
+        associated_token::authority = maker,
         associated_token::token_program = token_program,
     )]
     pub maker_token_account: InterfaceAccount<'info, TokenAccount>,
