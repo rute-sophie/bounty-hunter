@@ -131,6 +131,12 @@ async fn process_accept_submission(
         maker: payer.pubkey(),
         bounty: submission.bounty,
         submission: submission_address,
+        vault: todo!(),
+        hunter: todo!(),
+        mint: todo!(),
+        hunter_token_account: todo!(),
+        token_program: todo!(),
+        associated_token_program: todo!(),
     }
     .to_account_metas(None);
 
@@ -218,6 +224,7 @@ async fn process_create_bounty(
     description: String,
     link: String,
     reward: u64,
+    mint: Pubkey,
 ) -> Result<Signature, Box<dyn Error>> {
     let seed: u64 = rand::random();
     let bounty = Pubkey::find_program_address(
@@ -229,10 +236,21 @@ async fn process_create_bounty(
         &bounty_hunter::ID,
     );
 
+    let mint_acc = rpc_client.get_account(&mint).await.unwrap();
+
+    let maker_ata = spl_associated_token_account_interface::address::get_associated_token_address(&payer.pubkey(), &mint);
+    let vault = spl_associated_token_account_interface::address::get_associated_token_address(&bounty.0, &mint);
+
     let accounts = bounty_hunter::accounts::CreateBounty {
         bounty: bounty.0,
         maker: payer.pubkey(),
         system_program: solana_system_interface::program::ID,
+        mint,
+        maker_token_account: maker_ata,
+        vault: vault,
+        token_program: mint_acc.owner,
+        associated_token_program: spl_associated_token_account_interface::program::ID,
+        
     }
     .to_account_metas(None);
 
@@ -335,7 +353,11 @@ async fn process_cancel_bounty(
     let accounts = bounty_hunter::accounts::CancelBounty {
         bounty: bounty_address,
         maker: payer.pubkey(),
-        system_program: solana_system_interface::program::ID,
+        vault: todo!(),
+        mint: todo!(),
+        maker_token_account: todo!(),
+        token_program: todo!(),
+        associated_token_program: todo!(),
     }
     .to_account_metas(None);
 
@@ -439,7 +461,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .takes_value(true)
                         .required(true)
                         .help("Bounty reward"),
+                )
+                .arg(
+                    Arg::new("mint")
+                        .value_name("mint")
+                        .value_parser(SignerSourceParserBuilder::default().allow_pubkey().build())
+                        .takes_value(true)
+                        .required(true)
+                        .help("Specify the mint address"),
                 ),
+                
         )
         .subcommand(
             Command::new("submit-solution")
@@ -593,12 +624,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .expect("description is missing")
                 .parse()
                 .expect("unable to parse to u64");
+            let mint =
+                SignerSource::try_get_pubkey(arg_matches, "mint", &mut wallet_manager)
+                    .unwrap()
+                    .unwrap();
             let response = process_create_bounty(
                 &rpc_client,
                 &config.payer,
                 description.clone(),
                 link.clone(),
                 reward,
+                mint
             )
             .await
             .unwrap_or_else(|err| {

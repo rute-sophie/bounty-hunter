@@ -983,6 +983,7 @@ dependencies = [
  "solana-remote-wallet",
  "solana-sdk",
  "solana-system-interface",
+ "spl-associated-token-account-interface",
  "tokio",
 ]
 
@@ -5958,6 +5959,16 @@ name = "spl-associated-token-account-client"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f8349dbcbe575f354f9a533a21f272f3eb3808a49e2fdc1c34393b88ba76cb"
+dependencies = [
+ "solana-instruction",
+ "solana-pubkey",
+]
+
+[[package]]
+name = "spl-associated-token-account-interface"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e6bbe0794e532ac08428d3abf5bf8ae75bd81dfddd785c388e326c00c92c6f5"
 dependencies = [
  "solana-instruction",
  "solana-pubkey",
