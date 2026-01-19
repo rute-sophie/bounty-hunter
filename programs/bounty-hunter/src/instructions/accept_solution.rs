@@ -16,6 +16,7 @@ pub struct AcceptSolution<'info> {
     #[account(
         mut,
         has_one = maker @ BountyHunterErrors::InvalidBountyAuthority,
+        has_one = mint @ BountyHunterErrors::InvalidMint,
         constraint = bounty.accepted_submission == Pubkey::default() @ BountyHunterErrors::BountyClosed
         //constraint = bounty.maker == maker.key() @ BountyHunterErrors::InvalidBountyAuthority
     )]

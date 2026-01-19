@@ -62,9 +62,10 @@ impl CreateBounty<'_> {
             seed,
             description,
             link,
+            mint: ctx.accounts.mint.key(),
             reward,
             bump: ctx.bumps.bounty,
-            maker: *ctx.accounts.maker.key,
+            maker: ctx.accounts.maker.key(),
             accepted_submission: Pubkey::default(),
         });
         ctx.accounts.deposit_tokens(reward)?; /* the ? is equivalent to

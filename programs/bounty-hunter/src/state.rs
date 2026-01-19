@@ -8,6 +8,7 @@ pub struct Bounty {
     pub description: String,
     #[max_len(100)]
     pub link: String,
+    pub mint: Pubkey,
     pub reward: u64,
     pub bump: u8,
     pub maker: Pubkey,

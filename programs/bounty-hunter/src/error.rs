@@ -8,4 +8,6 @@ pub enum BountyHunterErrors {
     BountyAndSubmissionMismatch,
     #[msg("Bounty Already Closed")]
     BountyClosed,
+    #[msg("Wrong mint")]
+    InvalidMint,
 }

@@ -15,6 +15,7 @@ pub struct CancelBounty<'info> {
         mut,
         close = maker,
         has_one = maker @ BountyHunterErrors::InvalidBountyAuthority,
+        has_one = mint @ BountyHunterErrors::InvalidMint,
     )]
     pub bounty: Account<'info, Bounty>,
 
