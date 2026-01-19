@@ -3,7 +3,7 @@ use solana_client::rpc_config::RpcProgramAccountsConfig;
 use solana_client::rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType};
 use solana_sdk::instruction::Instruction;
 use {
-    clap::{Arg, Command, crate_description, crate_name, crate_version},
+    clap::{crate_description, crate_name, crate_version, Arg, Command},
     solana_clap_v3_utils::{
         input_parsers::{
             parse_url_or_moniker,
@@ -41,8 +41,8 @@ async fn process_get_bounty(
         .expect("bounty does not exist");
 
     println!(
-        "BOUNTY: \n\t maker: {} \n\t description: {} \n\t link: {} \n\t reward: {} \n\t accepted submission: {}",
-        bounty.maker, bounty.description, bounty.link, bounty.reward, bounty.accepted_submission
+        "BOUNTY: \n\t maker: {} \n\t description: {} \n\t link: {} \n\t mint: {} \n\t reward: {} \n\t accepted submission: {}",
+        bounty.maker, bounty.description, bounty.link, bounty.mint, bounty.reward, bounty.accepted_submission
     );
 
     Ok(())
@@ -81,11 +81,12 @@ async fn process_get_all_bounties(rpc_client: &Arc<RpcClient>) -> Result<(), Box
             .expect("bounty does not exist");
 
         println!(
-            "BOUNTY {}: \n\t maker: {} \n\t description: {} \n\t link: {} \n\t reward: {} \n\t accepted submission: {}",
+            "BOUNTY {}: \n\t maker: {} \n\t description: {} \n\t link: {} \n\t mint: {} \n\t reward: {} \n\t accepted submission: {}",
             pk,
             bounty.maker,
             bounty.description,
             bounty.link,
+            bounty.mint,
             bounty.reward,
             bounty.accepted_submission
         );
@@ -238,8 +239,13 @@ async fn process_create_bounty(
 
     let mint_acc = rpc_client.get_account(&mint).await.unwrap();
 
-    let maker_ata = spl_associated_token_account_interface::address::get_associated_token_address(&payer.pubkey(), &mint);
-    let vault = spl_associated_token_account_interface::address::get_associated_token_address(&bounty.0, &mint);
+    let maker_ata = spl_associated_token_account_interface::address::get_associated_token_address(
+        &payer.pubkey(),
+        &mint,
+    );
+    let vault = spl_associated_token_account_interface::address::get_associated_token_address(
+        &bounty.0, &mint,
+    );
 
     let accounts = bounty_hunter::accounts::CreateBounty {
         bounty: bounty.0,
@@ -250,7 +256,6 @@ async fn process_create_bounty(
         vault: vault,
         token_program: mint_acc.owner,
         associated_token_program: spl_associated_token_account_interface::program::ID,
-        
     }
     .to_account_metas(None);
 
@@ -350,14 +355,31 @@ async fn process_cancel_bounty(
     payer: &Arc<dyn Signer>,
     bounty_address: Pubkey,
 ) -> Result<Signature, Box<dyn Error>> {
+    let data = rpc_client.get_account_data(&bounty_address).await.unwrap();
+
+    let bounty = bounty_hunter::state::Bounty::try_deserialize(&mut data.as_ref())
+        .expect("bounty does not exist");
+
+    let vault = spl_associated_token_account_interface::address::get_associated_token_address(
+        &bounty_address,
+        &bounty.mint,
+    );
+
+    let maker_ata = spl_associated_token_account_interface::address::get_associated_token_address(
+        &payer.pubkey(),
+        &bounty.mint,
+    );
+
+    let mint_acc = rpc_client.get_account(&bounty.mint).await.unwrap();
+
     let accounts = bounty_hunter::accounts::CancelBounty {
         bounty: bounty_address,
         maker: payer.pubkey(),
-        vault: todo!(),
-        mint: todo!(),
-        maker_token_account: todo!(),
-        token_program: todo!(),
-        associated_token_program: todo!(),
+        vault: vault,
+        mint: bounty.mint,
+        maker_token_account: maker_ata,
+        token_program: mint_acc.owner,
+        associated_token_program: spl_associated_token_account_interface::program::ID,
     }
     .to_account_metas(None);
 
@@ -470,7 +492,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         .required(true)
                         .help("Specify the mint address"),
                 ),
-                
         )
         .subcommand(
             Command::new("submit-solution")
@@ -624,17 +645,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .expect("description is missing")
                 .parse()
                 .expect("unable to parse to u64");
-            let mint =
-                SignerSource::try_get_pubkey(arg_matches, "mint", &mut wallet_manager)
-                    .unwrap()
-                    .unwrap();
+            let mint = SignerSource::try_get_pubkey(arg_matches, "mint", &mut wallet_manager)
+                .unwrap()
+                .unwrap();
             let response = process_create_bounty(
                 &rpc_client,
                 &config.payer,
                 description.clone(),
                 link.clone(),
                 reward,
-                mint
+                mint,
             )
             .await
             .unwrap_or_else(|err| {
@@ -699,12 +719,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )
             .unwrap()
             .unwrap();
-            let response = process_accept_submission(&rpc_client, &config.payer, submission_address)
-                .await
-                .unwrap_or_else(|err| {
-                    eprintln!("error: accept-submission: {}", err);
-                    exit(1);
-                });
+            let response =
+                process_accept_submission(&rpc_client, &config.payer, submission_address)
+                    .await
+                    .unwrap_or_else(|err| {
+                        eprintln!("error: accept-submission: {}", err);
+                        exit(1);
+                    });
             println!("{}", response);
         }
         ("cancel-bounty", arg_matches) => {
