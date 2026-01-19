@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use anchor_client::{
+    anchor_lang,
     solana_sdk::{
         commitment_config::CommitmentConfig, pubkey::Pubkey, signature::read_keypair_file,
     },
@@ -21,8 +22,22 @@ fn test_initialize() {
 
     let tx = program
         .request()
-        .accounts(bounty_hunter::accounts::Initialize {})
-        .args(bounty_hunter::instruction::Initialize {})
+        .accounts(bounty_hunter::accounts::CreateBounty {
+            maker: todo!(),
+            bounty: todo!(),
+            mint: todo!(),
+            maker_token_account: todo!(),
+            vault: todo!(),
+            system_program: todo!(),
+            token_program: todo!(),
+            associated_token_program: todo!(),
+        })
+        .args(bounty_hunter::instruction::CreateBounty {
+            seed: 0,
+            description: "testeeee".to_string(),
+            link: "httpQQcoisa".to_string(),
+            reward: 1,
+        })
         .send()
         .expect("");
 
