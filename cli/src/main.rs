@@ -128,16 +128,36 @@ async fn process_accept_submission(
     let submission = bounty_hunter::state::Submission::try_deserialize(&mut data.as_ref())
         .expect("bounty does not exist");
 
+    let data = rpc_client
+        .get_account_data(&submission.bounty)
+        .await
+        .unwrap();
+
+    let bounty = bounty_hunter::state::Bounty::try_deserialize(&mut data.as_ref())
+        .expect("bounty does not exist");
+
+    let vault = spl_associated_token_account_interface::address::get_associated_token_address(
+        &submission.bounty,
+        &bounty.mint,
+    );
+
+    let hunter_ata = spl_associated_token_account_interface::address::get_associated_token_address(
+        &submission.hunter,
+        &bounty.mint,
+    );
+
+    let mint_acc = rpc_client.get_account(&bounty.mint).await.unwrap();
+
     let accounts = bounty_hunter::accounts::AcceptSolution {
         maker: payer.pubkey(),
         bounty: submission.bounty,
         submission: submission_address,
-        vault: todo!(),
-        hunter: todo!(),
-        mint: todo!(),
-        hunter_token_account: todo!(),
-        token_program: todo!(),
-        associated_token_program: todo!(),
+        vault: vault,
+        hunter: submission.hunter,
+        mint: bounty.mint,
+        hunter_token_account: hunter_ata,
+        token_program: mint_acc.owner,
+        associated_token_program: spl_associated_token_account_interface::program::ID,
     }
     .to_account_metas(None);
 
