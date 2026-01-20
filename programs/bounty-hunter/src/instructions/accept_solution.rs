@@ -15,15 +15,14 @@ pub struct AcceptSolution<'info> {
     pub maker: Signer<'info>,
     #[account(
         mut,
-        has_one = maker @ BountyHunterErrors::InvalidBountyAuthority,
+        has_one = maker @ BountyHunterErrors::InvalidBountyAuthority,      //alternativa constraint = bounty.maker == maker.key() @ BountyHunterErrors::InvalidBountyAuthority
         has_one = mint @ BountyHunterErrors::InvalidMint,
         constraint = bounty.accepted_submission == Pubkey::default() @ BountyHunterErrors::BountyClosed
-        //constraint = bounty.maker == maker.key() @ BountyHunterErrors::InvalidBountyAuthority
     )]
     pub bounty: Account<'info, Bounty>,
     #[account(
         has_one = bounty @ BountyHunterErrors::BountyAndSubmissionMismatch, //only works for pubkeys
-        //constraint = submission.bounty == bounty.key() @ BountyHunterErrors::BountyAndSubmissionMismatch
+        //alternativa constraint = submission.bounty == bounty.key() @ BountyHunterErrors::BountyAndSubmissionMismatch
     )]
     pub submission: Account<'info, Submission>,
     #[account(
@@ -53,10 +52,12 @@ pub struct AcceptSolution<'info> {
 
 impl AcceptSolution<'_> {
     pub fn handler(ctx: Context<AcceptSolution>) -> Result<()> {
+        //alternativas 'as de cima: 
         //require!(ctx.accounts.bounty.maker == ctx.accounts.maker.key(), BountyHunterErrors::InvalidBountyAuthority);
         //require!(ctx.accounts.submission.bounty == ctx.accounts.bounty.key(), BountyHunterErrors::BountyAndSubmissionMismatch);
 
         ctx.accounts.bounty.accepted_submission = ctx.accounts.submission.key();
+        ctx.accounts.transfer_reward()?;
         Ok(())
     }
 
