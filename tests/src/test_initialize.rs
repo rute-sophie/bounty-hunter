@@ -57,4 +57,40 @@ fn test() {
 
     ctx.svm.assert_token_balance(&vault, 1);
 
+
+    // --- Cancel bounty ---
+    let cancel_ix = ctx
+        .program()
+        .accounts(bounty_hunter::accounts::CancelBounty {
+            maker: user.pubkey(),
+            bounty,
+            vault,
+            mint: mint.pubkey(),
+            maker_token_account,
+            token_program: spl_token::ID,
+            associated_token_program:
+                spl_associated_token_account_client::program::ID,
+        })
+        .args(bounty_hunter::instruction::CancelBounty {})
+        .instruction()
+        .unwrap();
+
+    ctx.execute_instruction(cancel_ix, &[&user])
+        .unwrap()
+        .assert_success();
+
+    // --- Assertions ---
+
+    // Vault should be emptied
+    ctx.svm.assert_token_balance(&vault, 0);
+
+    // Maker should get the reward back
+    ctx.svm.assert_token_balance(&maker_token_account, 10_000);
+
+    // Bounty account should be closed (or no longer exist)
+    //let b: Bounty = ctx.get_account(&bounty).unwrap();
+    //assert!(b.is_none());
+
 }
+
+
