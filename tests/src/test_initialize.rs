@@ -1,45 +1,60 @@
-use std::str::FromStr;
+use anchor_litesvm::{AnchorLiteSVM, Signer};
+use bounty_hunter::state::Bounty;
+use litesvm_utils::{AssertionHelpers, TestHelpers};
 
-use anchor_client::{
-    anchor_lang,
-    solana_sdk::{
-        commitment_config::CommitmentConfig, pubkey::Pubkey, signature::read_keypair_file,
-    },
-    Client, Cluster,
-};
 
-use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
+use spl_associated_token_account_client::address::get_associated_token_address;
+
 
 #[test]
-fn test_initialize() {
-    let program_id = "ELt3SqpiHUsHJ5fxZpH1ksug6nWjAvYBxxKqK5PHfkBa";
-    let anchor_wallet = std::env::var("ANCHOR_WALLET").unwrap();
-    let payer = read_keypair_file(&anchor_wallet).unwrap();
+fn test() {
+    let mut ctx = AnchorLiteSVM::build_with_program(
+        bounty_hunter::ID,
+        include_bytes!("../../target/deploy/bounty_hunter.so"),
+    );
 
-    let client = Client::new_with_options(Cluster::Localnet, &payer, CommitmentConfig::confirmed());
-    let program_id = Pubkey::try_from(program_id).unwrap();
-    let program = client.program(program_id).unwrap();
+    let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+    let mint = ctx.svm.create_token_mint(&user, 3).unwrap();
 
-    let tx = program
-        .request()
-        .accounts(bounty_hunter::accounts::CreateBounty {
-            maker: todo!(),
-            bounty: todo!(),
-            mint: todo!(),
-            maker_token_account: todo!(),
-            vault: todo!(),
-            system_program: todo!(),
-            token_program: todo!(),
-            associated_token_program: todo!(),
-        })
-        .args(bounty_hunter::instruction::CreateBounty {
-            seed: 0,
+    let maker_token_account = ctx.svm.create_associated_token_account(&mint.pubkey(), &user).unwrap();
+    
+    
+    ctx.svm.mint_to(&mint.pubkey(), &maker_token_account, &user, 10_000).unwrap();
+    
+    let seed = 1u64;
+    
+    let (bounty, _) = ctx.svm.get_pda_with_bump(&[b"bounty", user.pubkey().as_array(), &seed.to_le_bytes()], &bounty_hunter::ID);
+    let vault = get_associated_token_address(&bounty, &mint.pubkey());
+
+    let ix = ctx.program().accounts(
+        bounty_hunter::accounts::CreateBounty {
+            maker: user.pubkey(),
+            bounty: bounty,
+            mint: mint.pubkey(),
+            maker_token_account: maker_token_account,
+            vault: vault,
+            system_program: solana_system_interface::program::ID,
+            token_program: spl_token::ID,
+            associated_token_program: spl_associated_token_account_client::program::ID,
+        }
+    ).args(bounty_hunter::instruction::CreateBounty{ 
+            seed: seed,
             description: "testeeee".to_string(),
             link: "httpQQcoisa".to_string(),
-            reward: 1,
-        })
-        .send()
-        .expect("");
+            reward: 1, })
+    .instruction()
+    .unwrap();
 
-    println!("Your transaction signature {}", tx);
+    ctx.execute_instruction(ix, &[&user]).unwrap().assert_success();
+
+    let b: Bounty = ctx.get_account(&bounty).unwrap();
+
+    assert_eq!(b.maker, user.pubkey());
+    assert_eq!(b.description, "testeeee".to_string());
+    assert_eq!(b.link, "httpQQcoisa".to_string());
+    assert_eq!(b.reward, 1);
+    assert_eq!(b.seed, seed);
+
+    ctx.svm.assert_token_balance(&vault, 1);
+
 }
