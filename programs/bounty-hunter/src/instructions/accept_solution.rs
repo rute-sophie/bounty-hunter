@@ -52,7 +52,7 @@ pub struct AcceptSolution<'info> {
 
 impl AcceptSolution<'_> {
     pub fn handler(ctx: Context<AcceptSolution>) -> Result<()> {
-        //alternativas 'as de cima: 
+        //alternativas 'as de cima:
         //require!(ctx.accounts.bounty.maker == ctx.accounts.maker.key(), BountyHunterErrors::InvalidBountyAuthority);
         //require!(ctx.accounts.submission.bounty == ctx.accounts.bounty.key(), BountyHunterErrors::BountyAndSubmissionMismatch);
 

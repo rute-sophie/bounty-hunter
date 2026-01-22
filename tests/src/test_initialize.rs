@@ -5,7 +5,7 @@ use litesvm_utils::{AssertionHelpers, TestHelpers};
 use spl_associated_token_account_client::address::get_associated_token_address;
 
 #[test]
-fn test() {
+fn create_bounty_test() {
     let mut ctx = AnchorLiteSVM::build_with_program(
         bounty_hunter::ID,
         include_bytes!("../../target/deploy/bounty_hunter.so"),
@@ -95,6 +95,32 @@ fn cancel_bounty_test() {
     );
     let vault = get_associated_token_address(&bounty, &mint.pubkey());
 
+    // --- Create bounty ---
+    let ix = ctx
+        .program()
+        .accounts(bounty_hunter::accounts::CreateBounty {
+            maker: user.pubkey(),
+            bounty: bounty,
+            mint: mint.pubkey(),
+            maker_token_account: maker_token_account,
+            vault: vault,
+            system_program: solana_system_interface::program::ID,
+            token_program: spl_token::ID,
+            associated_token_program: spl_associated_token_account_client::program::ID,
+        })
+        .args(bounty_hunter::instruction::CreateBounty {
+            seed: seed,
+            description: "testeeee".to_string(),
+            link: "httpQQcoisa".to_string(),
+            reward: 1,
+        })
+        .instruction()
+        .unwrap();
+
+    ctx.execute_instruction(ix, &[&user])
+        .unwrap()
+        .assert_success();
+
     let cancel_ix = ctx
         .program()
         .accounts(bounty_hunter::accounts::CancelBounty {
@@ -117,14 +143,15 @@ fn cancel_bounty_test() {
     // --- Assertions ---
 
     // Vault should be emptied
-    ctx.svm.assert_token_balance(&vault, 0);
+    ctx.svm.assert_account_closed(&vault);
 
     // Maker should get the reward back
     ctx.svm.assert_token_balance(&maker_token_account, 10_000);
 
     // Bounty account should be closed (or no longer exist)
-    //let b: Bounty = ctx.get_account(&bounty).unwrap();
-    //assert!(b.is_none());
+    let res = ctx.get_account::<Bounty>(&bounty);
+    assert!(res.is_err());
+    ctx.svm.assert_account_closed(&bounty);
 }
 
 #[test]
@@ -175,6 +202,10 @@ fn submit_solution_test() {
         .instruction()
         .unwrap();
 
+    ctx.execute_instruction(create_ix, &[&user])
+        .unwrap()
+        .assert_success();
+
     let hunter = ctx.svm.create_funded_account(10_000_000_000).unwrap();
 
     let (submission, _) = ctx.svm.get_pda_with_bump(
@@ -211,7 +242,7 @@ fn submit_solution_test() {
 }
 
 #[test]
-fn test_accept_solution() {
+fn accept_solution_test() {
     let mut ctx = AnchorLiteSVM::build_with_program(
         bounty_hunter::ID,
         include_bytes!("../../target/deploy/bounty_hunter.so"),
@@ -328,8 +359,7 @@ fn test_accept_solution() {
     ctx.svm.assert_token_balance(&hunter_token_account, 1);
 
     // Vault closed
-    let vault_balance = ctx.svm.get_balance(&vault);
-  //  assert!(vault_balance.is_err());
+    ctx.svm.assert_account_closed(&vault);
 
     // Bounty updated
     let b: Bounty = ctx.get_account(&bounty).unwrap();

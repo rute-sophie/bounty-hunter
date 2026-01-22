@@ -152,7 +152,7 @@ async fn process_accept_submission(
         maker: payer.pubkey(),
         bounty: submission.bounty,
         submission: submission_address,
-        vault: vault,
+        vault,
         hunter: submission.hunter,
         mint: bounty.mint,
         hunter_token_account: hunter_ata,
@@ -170,7 +170,7 @@ async fn process_accept_submission(
     };
 
     let mut transaction =
-        Transaction::new_unsigned(Message::new(&[ix].as_slice(), Some(&payer.pubkey())));
+        Transaction::new_unsigned(Message::new([ix].as_slice(), Some(&payer.pubkey())));
 
     let blockhash = rpc_client
         .get_latest_blockhash()
@@ -273,7 +273,7 @@ async fn process_create_bounty(
         system_program: solana_system_interface::program::ID,
         mint,
         maker_token_account: maker_ata,
-        vault: vault,
+        vault,
         token_program: mint_acc.owner,
         associated_token_program: spl_associated_token_account_interface::program::ID,
     }
@@ -294,7 +294,7 @@ async fn process_create_bounty(
     };
 
     let mut transaction =
-        Transaction::new_unsigned(Message::new(&[ix].as_slice(), Some(&payer.pubkey())));
+        Transaction::new_unsigned(Message::new([ix].as_slice(), Some(&payer.pubkey())));
 
     let blockhash = rpc_client
         .get_latest_blockhash()
@@ -349,7 +349,7 @@ async fn process_submit_solution(
     };
 
     let mut transaction =
-        Transaction::new_unsigned(Message::new(&[ix].as_slice(), Some(&payer.pubkey())));
+        Transaction::new_unsigned(Message::new([ix].as_slice(), Some(&payer.pubkey())));
 
     let blockhash = rpc_client
         .get_latest_blockhash()
@@ -395,7 +395,7 @@ async fn process_cancel_bounty(
     let accounts = bounty_hunter::accounts::CancelBounty {
         bounty: bounty_address,
         maker: payer.pubkey(),
-        vault: vault,
+        vault,
         mint: bounty.mint,
         maker_token_account: maker_ata,
         token_program: mint_acc.owner,
@@ -412,7 +412,7 @@ async fn process_cancel_bounty(
     };
 
     let mut transaction =
-        Transaction::new_unsigned(Message::new(&[ix].as_slice(), Some(&payer.pubkey())));
+        Transaction::new_unsigned(Message::new([ix].as_slice(), Some(&payer.pubkey())));
 
     let blockhash = rpc_client
         .get_latest_blockhash()
